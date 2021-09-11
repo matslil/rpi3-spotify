@@ -1,0 +1,139 @@
+#!/bin/bash -x
+
+# Need to register qemu support, for Ubuntu:
+#
+#     sudo apt install qemu-user-static
+#     docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+#
+# It is assumed that the following wiring has been done on the Raspberry PI:
+#   - GPIO 18 to 330ohm resistor to LED to GND
+#   - GPIO 4 to diode to GPIO 3
+#   - GPIO 3 to push-button to GND
+#
+# This will give you a power-on LED and an on/off button
+
+readonly FILE='ArchLinuxARM-rpi-2-latest.tar.gz'
+readonly FILE_ROOT="${HOME}/Downloads"
+
+set -Eeuo pipefail
+
+readonly NAME=$(basename "$0")
+readonly SCRIPT_ROOT="${0%/*}"
+
+# Unmount and remove temporary directories at exit
+cleanup() {
+	local -r status=$?
+	if [[ -n ${MNTDIR:-} && -e ${MNTDIR} ]]; then
+		printf -- '--- Performing cleanup...\n'
+		if [[ -e ${MNTDIR}/boot ]]; then
+			if ${MOUNTPOINT} -q "${MNTDIR}/boot"; then
+				sudo umount "${MNTDIR}/boot"
+			fi
+		fi
+		if ${MOUNTPOINT} -q "${MNTDIR}"; then
+			sudo umount "${MNTDIR}"
+		fi
+		sudo rmdir "${MNTDIR}"
+	fi
+	[[ -z ${CONTAINER:-} ]] || docker container rm --force "${CONTAINER}"
+
+	(( status == 0 )) || printf 'Exiting with error status %d\n' "${status}" >&2
+	exit ${status}
+}
+
+fail() {
+	printf '%s: %s: Terminating\n' "${NAME}" "$*" >&2
+	exit 1
+}
+
+usage() {
+	cat <<EOF >&2
+${NAME} DEVICE
+
+Prepare a USB disk named by DEVICE to be booted on a Raspberry Pi 3.
+
+Configurations are written to a file named '${SCRIPT_ROOT}/env' in current working directory.
+The filw should have the following content:
+    ALARM_PW=<user password for alarm>
+    WLAN_SSID=<name (SSID) of WLAN network to connect to>
+    WLAN_PW=<password (PSK) for WLAN network>
+
+Parameters:
+    DEVICE  is a name of a block device, e.g. "/dev/sdc".
+EOF
+	exit 1
+}
+
+(( $# == 1 )) || usage
+
+# Check that each tool named by the arguments exist, and creates a bash variable
+# with the same name as the tool but with upper-case letters containing the
+# path to the tool.
+assert_tools() {
+	for tool_name in "$@"; do
+		VARIABLE_NAME="${tool_name^^}"
+
+		readonly ${VARIABLE_NAME}=$( command -v "${tool_name}" )
+		[[ -n ${!VARIABLE_NAME} ]] || fail "${tool_name}: Command not found in PATH. Please install applicable package to install this command"
+	done
+}
+
+assert_tools docker udevadm sed mountpoint curl
+
+[[ -f ${SCRIPT_ROOT}/env ]] || fail "${SCRIPT_ROOT}/env: Missing environment description file. Call script without parameters for more information"
+
+DEVICE="$1"
+
+[[ -e /proc/sys/fs/binfmt_misc/qemu-aarch64 ]] || fail "Must install qemu-arm binfmt support. On Ubuntu distributions: 'sudo apt install qemu-user-binfmt'"
+
+# Docker can't download and unpack in one go, so we need to do download separately
+if [[ -f ${SCRIPT_ROOT}/${FILE} ]]; then
+	printf -- '--- %s: Re-using file...\n' "${FILE}"
+else
+	printf -- '--- %s: Downloading base image... \n' "${FILE}"
+	curl -Lo "${SCRIPT_ROOT}/${FILE}" "http://os.archlinuxarm.org/os/${FILE}"
+fi
+
+printf -- '--- Configuring OS image...\n'
+docker build -t rpi3-spotify --build-arg IMAGE="${FILE}" "${SCRIPT_ROOT}"
+
+readonly BUS=$( udevadm info --query=all --name="${DEVICE}" | sed -rn 's/.*ID_BUS=(.*)$/\1/p' ) || fail "${DEVICE} not a valid block device"
+
+printf -- '--- Creating partition table on device...\n'
+
+[[ -n ${BUS} ]] || fail "${DEVICE}: Not a valid block device"
+[[ ${BUS:-} == 'usb' ]] || fail "${DEVICE} is not a USB device"
+
+sudo sfdisk "${DEVICE}" <<EOF
+label:dos
+,300MiB,b,*
+,
+EOF
+
+partprobe
+
+printf -- '--- Creating file systems on device...\n'
+
+sudo mkfs.vfat "${DEVICE}1"
+sudo mkfs.btrfs -f "${DEVICE}2"
+
+printf -- '--- Monuting...\n'
+
+# Make sure our mounts and mountpoints are cleaned up at exit
+trap cleanup EXIT
+
+MNTDIR=$( mktemp -td "${NAME}-XXXXXXXX" )
+
+sudo mount "${DEVICE}2" "${MNTDIR}"
+sudo mkdir "${MNTDIR}/boot"
+sudo mount "${DEVICE}1" "${MNTDIR}/boot"
+
+printf -- '--- Writing filesystem...\n'
+
+# Can only export from running container, so run a dummy
+CONTAINER=$( docker run --detach rpi3-spotify sleep infinity )
+
+docker export "${CONTAINER}" | sudo tar xf - -C "${MNTDIR}"
+
+printf '=== Image created successfully\n'
+

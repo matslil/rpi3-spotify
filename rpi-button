@@ -1,0 +1,30 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+gpio=3
+
+from gpiozero import Button
+from signal import pause
+from subprocess import check_call
+
+held_for=0.0
+
+def button_pushed():
+        global held_for
+        held_for = max(held_for, button.held_time + button.hold_time)
+
+def button_released():
+        global held_for
+        if (held_for > 3.0):
+                check_call(['/sbin/halt'])
+#        elif (held_for > 1.0):
+#                check_call(['/sbin/reboot'])
+        else:
+        	held_for = 0.0
+
+button=Button(gpio, bounce_time=0.5, hold_repeat=True)
+button.when_held = button_pushed
+button.when_released = button_released
+
+pause() # wait forever
+

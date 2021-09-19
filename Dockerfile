@@ -13,17 +13,44 @@ ADD ${IMAGE} /
 
 COPY env /
 COPY config.txt /boot/
-COPY wpa_supplicant.conf /boot/
 
-# Make somethings that can boot
-RUN . /env && sed -i -e 's/wifi_ssid/'"${WLAN_SSID}"'/' -e 's/wifi_password/'"${WLAN_PW}"'/' /boot/wpa_supplicant.conf
-RUN sed -i 's/mmcblk0p1/sda1/' /etc/fstab
-RUN echo 'root=/dev/sda2 rw rootwait console=tty1 selinux=0 plymouth.enable=0 smsc95xx.turbo_mode=N dwc_otg.lpm_enable=0 logo.nologo' > /boot/cmdline.txt
-RUN sed -i 's/MODULES=()/MODULES=(btrfs)/' /etc/mkinitcpio.conf
+# Install pacman database and tools for generating initramfs
 RUN pacman-key --init
 RUN pacman-key --populate archlinuxarm
 RUN pacman --sync --refresh --refresh --quiet --noconfirm uboot-tools btrfs-progs sudo
+
+# Setup USB and btrfs boot media
+RUN sed -i 's/mmcblk0p1/sda1/' /etc/fstab
+RUN echo 'root=/dev/sda2 rw rootwait console=tty1 selinux=0 plymouth.enable=0 smsc95xx.turbo_mode=N dwc_otg.lpm_enable=0 logo.nologo' > /boot/cmdline.txt
+RUN sed -i 's/MODULES=()/MODULES=(btrfs)/' /etc/mkinitcpio.conf
 RUN mkinitcpio -P
+
+# Setup Wifi at boot
+COPY wlan0.network /etc/systemd/network/
+COPY wpa_supplicant-wlan0.conf /etc/wpa_supplicant/wpa_supplicant-wlan0.conf
+RUN . /env && wpa_passphrase "${WLAN_SSID}" "${WLAN_PW}" >> /etc/wpa_supplicant/wpa_supplicant-wlan0.conf
+RUN printf '        %s\n' "scan_ssid=1" "key_mgmt=WPA-PSK" > wpa_fragment.conf
+RUN sed -i '/^[ \t]*ssid=.*/r wpa_fragment.conf' /etc/wpa_supplicant/wpa_supplicant-wlan0.conf
+RUN rm wpa_fragment.conf
+RUN chmod 400 /etc/wpa_supplicant/wpa_supplicant-wlan0.conf
+RUN ln -s /usr/lib/systemd/system/wpa_supplicant@.service /etc/systemd/system/multi-user.target.wants/wpa_supplicant@wlan0.service
+
+# Install button support
+COPY rpi-button /sbin/
+COPY rpi-button.service /etc/systemd/system/
+COPY rpi-display-backlight.service /etc/systemd/system/
+RUN systemctl enable rpi-button.service rpi-display-backlight.service
+RUN pacman --sync --refresh --quiet --noconfirm python-pip
+RUN pip install pigpio gpiozero
+
+# Autologin to console, first part is done by copying autologin.conf above
+COPY autologin.conf /etc/systemd/system/getty@tty1.service.d/
+COPY autologintty /etc/
+COPY login.pam /
+RUN systemctl set-default multi-user.target
+RUN ln -fs /lib/systemd/system/getty@.service /etc/systemd/system/getty.target.wants/getty@tty1.service
+RUN sed -i '/^#%PAM.*/r /login.pam' /etc/pam.d/login
+RUN rm /login.pam
 
 # Setup sane user environment
 # This involves removing possibility to login as root, change password for alarm user and make alarm part of sudo
@@ -31,10 +58,16 @@ RUN echo 'alarm ALL=(ALL) ALL' > /etc/sudoers.d/alarm
 RUN . /env && printf '%s:%s\n' 'alarm' "${ALARM_PW}" | chpasswd
 RUN passwd --lock root
 
+# Remove /env file, so we don't expose passwords
+RUN rm /env
+
 # Install Wayland and Firefox
-RUN pacman --sync --quiet --noconfirm wayland firefox
+COPY config.sway /home/alarm/.config/sway/config
+RUN pacman --sync --refresh --quiet --noconfirm wayland sway firefox
 RUN echo 'MOZ_ENABLE_WAYLAND=1' >> /etc/environment
+RUN echo 'XDG_CURRENT_DESKTOP=cage' >> /etc/environment
+RUN echo 'XDG_SESSION_TYPE=wayland' >> /etc/environment
 
 # Install audio over bluetooth support
-RUN pacman --sync --quiet --noconfirm pipewire pipewire-alsa pipewire-pulse
+RUN pacman --sync --refresh --quiet --noconfirm pipewire pipewire-pulse xdg-desktop-portal-wlr
 

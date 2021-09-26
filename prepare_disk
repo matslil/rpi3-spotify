@@ -7,18 +7,17 @@
 #
 # It is assumed that the following wiring has been done on the Raspberry PI:
 #   - GPIO 18 to 330ohm resistor to LED to GND
-#   - GPIO 4 to diode to GPIO 3
 #   - GPIO 3 to push-button to GND
 #
 # This will give you a power-on LED and an on/off button
 
 readonly FILE='ArchLinuxARM-rpi-2-latest.tar.gz'
-readonly FILE_ROOT="${HOME}/Downloads"
 
 set -Eeuo pipefail
 
 readonly NAME=$(basename "$0")
 readonly SCRIPT_ROOT="${0%/*}"
+readonly FILES_ROOT="${SCRIPT_ROOT}/container/files"
 
 # Unmount and remove temporary directories at exit
 cleanup() {
@@ -52,7 +51,7 @@ ${NAME} DEVICE
 
 Prepare a USB disk named by DEVICE to be booted on a Raspberry Pi 3.
 
-Configurations are written to a file named '${SCRIPT_ROOT}/env' in current working directory.
+Configurations are written to a file named '${FILES_ROOT}/env' in current working directory.
 The filw should have the following content:
     ALARM_PW=<user password for alarm>
     WLAN_SSID=<name (SSID) of WLAN network to connect to>
@@ -80,22 +79,22 @@ assert_tools() {
 
 assert_tools docker udevadm sed mountpoint curl
 
-[[ -f ${SCRIPT_ROOT}/env ]] || fail "${SCRIPT_ROOT}/env: Missing environment description file. Call script without parameters for more information"
+[[ -f ${FILES_ROOT}/env ]] || fail "${FILES_ROOT}/env: Missing environment description file. Call script without parameters for more information"
 
 DEVICE="$1"
 
 [[ -e /proc/sys/fs/binfmt_misc/qemu-aarch64 ]] || fail "Must install qemu-arm binfmt support. On Ubuntu distributions: 'sudo apt install qemu-user-binfmt'"
 
 # Docker can't download and unpack in one go, so we need to do download separately
-if [[ -f ${SCRIPT_ROOT}/${FILE} ]]; then
-	printf -- '--- %s: Re-using file...\n' "${FILE}"
+if [[ -f ${FILES_ROOT}/${FILE} ]]; then
+	printf -- '--- %s: Re-using file...\n' "${FILES_ROOT}/${FILE}"
 else
-	printf -- '--- %s: Downloading base image... \n' "${FILE}"
-	curl -Lo "${SCRIPT_ROOT}/${FILE}" "http://os.archlinuxarm.org/os/${FILE}"
+	printf -- '--- %s: Downloading base image... \n' "${FILES_ROOT}/${FILE}"
+	curl -Lo "${FILES_ROOT}/${FILE}" "http://os.archlinuxarm.org/os/${FILE}"
 fi
 
 printf -- '--- Configuring OS image...\n'
-docker build -t rpi3-spotify --build-arg IMAGE="${FILE}" "${SCRIPT_ROOT}"
+docker build -t rpi3-spotify --build-arg IMAGE="${FILE}" "${SCRIPT_ROOT}/container"
 
 readonly BUS=$( udevadm info --query=all --name="${DEVICE}" | sed -rn 's/.*ID_BUS=(.*)$/\1/p' ) || fail "${DEVICE} not a valid block device"
 

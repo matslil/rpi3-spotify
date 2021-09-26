@@ -2,7 +2,7 @@
 Description=Turns off Raspberry Pi display backlight on shutdown/reboot
 ConditionPathIsDirectory=/proc/device-tree/rpi_backlight
 DefaultDependencies=no
-Before=umount.target
+After=umount.target
 
 [Service]
 Type=oneshot

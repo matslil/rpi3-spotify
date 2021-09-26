@@ -1,3 +1,6 @@
 xwayland disable
-exec firefox
-
+layout stacked
+exec /bin/sh -c 'echo "$SWAYSOCK" > /tmp/swaysock'
+exec rpi-backlight-gui
+exec firefox --kiosk open.spotify.com
+include /etc/sway/config.d/*

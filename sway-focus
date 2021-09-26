@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# Focus to next windows, assumes wrap-around and that socket has been
+# written to file /tmp/swaysock
+
+exec /usr/bin/swaymsg --socket "$(cat /tmp/swaysock)" "focus up"

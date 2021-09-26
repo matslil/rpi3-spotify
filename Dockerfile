@@ -22,7 +22,7 @@ RUN pacman --sync --refresh --refresh --quiet --noconfirm uboot-tools btrfs-prog
 # Setup USB and btrfs boot media
 RUN sed -i 's/mmcblk0p1/sda1/' /etc/fstab
 RUN echo 'root=/dev/sda2 rw rootwait console=tty1 selinux=0 plymouth.enable=0 smsc95xx.turbo_mode=N dwc_otg.lpm_enable=0 logo.nologo' > /boot/cmdline.txt
-RUN sed -i 's/MODULES=()/MODULES=(btrfs)/' /etc/mkinitcpio.conf
+RUN sed -i 's/MODULES=()/MODULES=(btrfs btusb)/' /etc/mkinitcpio.conf
 RUN mkinitcpio -P
 
 # Setup Wifi at boot
@@ -41,14 +41,14 @@ COPY rpi-button.service /etc/systemd/system/
 COPY rpi-display-backlight.service /etc/systemd/system/
 RUN systemctl enable rpi-button.service rpi-display-backlight.service
 RUN pacman --sync --refresh --quiet --noconfirm python-pip
-RUN pip install pigpio gpiozero
+RUN pip install gpiozero
 
 # Autologin to console, first part is done by copying autologin.conf above
-COPY autologin.conf /etc/systemd/system/getty@tty1.service.d/
+COPY autologin.conf /etc/systemd/system/getty@tty2.service.d/
 COPY autologintty /etc/
 COPY login.pam /
 RUN systemctl set-default multi-user.target
-RUN ln -fs /lib/systemd/system/getty@.service /etc/systemd/system/getty.target.wants/getty@tty1.service
+RUN ln -fs /lib/systemd/system/getty@.service /etc/systemd/system/getty.target.wants/getty@tty2.service
 RUN sed -i '/^#%PAM.*/r /login.pam' /etc/pam.d/login
 RUN rm /login.pam
 
@@ -62,12 +62,22 @@ RUN passwd --lock root
 RUN rm /env
 
 # Install Wayland and Firefox
-COPY config.sway /home/alarm/.config/sway/config
 RUN pacman --sync --refresh --quiet --noconfirm wayland sway firefox
 RUN echo 'MOZ_ENABLE_WAYLAND=1' >> /etc/environment
 RUN echo 'XDG_CURRENT_DESKTOP=cage' >> /etc/environment
 RUN echo 'XDG_SESSION_TYPE=wayland' >> /etc/environment
 
 # Install audio over bluetooth support
-RUN pacman --sync --refresh --quiet --noconfirm pipewire pipewire-pulse xdg-desktop-portal-wlr
+RUN pacman --sync --refresh --quiet --noconfirm pipewire pipewire-pulse xdg-desktop-portal-wlr bluez bluez-utils blueman
+RUN systemctl enable bluetooth.service
 
+# Backlight control GUI
+COPY backlight-permissions.rules /etc/udev/rules.d/
+RUN pip install rpi_backlight
+
+# Clean pacman caches to minimize disk usage
+RUN pacman --sync --quiet --noconfirm --clean --clean
+
+# Configure sway
+COPY config.sway /etc/sway/config
+COPY sway-focus /sbin

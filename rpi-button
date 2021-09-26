@@ -17,12 +17,12 @@ def button_released():
         global held_for
         if (held_for > 3.0):
                 check_call(['/sbin/halt'])
-#        elif (held_for > 1.0):
-#                check_call(['/sbin/reboot'])
+        elif (held_for > 0.5):
+                check_call(['/sbin/sway-focus'])
         else:
         	held_for = 0.0
 
-button=Button(gpio, bounce_time=0.5, hold_repeat=True)
+button=Button(gpio, hold_repeat=True)
 button.when_held = button_pushed
 button.when_released = button_released
 

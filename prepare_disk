@@ -135,5 +135,9 @@ CONTAINER=$( docker run --detach rpi3-spotify sleep infinity )
 
 docker export "${CONTAINER}" | sudo tar xf - -C "${MNTDIR}"
 
+# This file is created by Docker itself, and needs to be removed or else
+# systemd will think we are still running in a container.
+sudo rm "${MNTDIR}/.dockerenv"
+
 printf '=== Image created successfully\n'
 

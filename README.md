@@ -11,9 +11,11 @@ Get started
 
 1. Create a file under `container/files/env` with this content:
 
+    ```bash
     ALARM_PW=<password for default user, needed for sudo access>
     WLAN_SSID=<name of Wifi to connect to>
     WLAN_PW=<Wifi password>
+    ```
 
 2. Insert the USB stick you will be using with your Raspberry Pi.
 

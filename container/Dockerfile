@@ -1,3 +1,7 @@
+# Copyright (c) 2021 Mats G. Liljegren
+# SPDX-License-Identifier: MIT
+# This file is under MIT license, see LICENSE file or https://spdx.org/licenses/MIT.html.
+
 from scratch as build
 
 # Arguments expected to be given on build command line
@@ -66,9 +70,11 @@ RUN pacman --sync --refresh --quiet --noconfirm wayland sway firefox
 RUN echo 'MOZ_ENABLE_WAYLAND=1' >> /etc/environment
 RUN echo 'XDG_CURRENT_DESKTOP=cage' >> /etc/environment
 RUN echo 'XDG_SESSION_TYPE=wayland' >> /etc/environment
+RUN echo 'WAYLAND_DISPLAY="wayland-1"' >> /etc/environment
 
 # Install audio over bluetooth support
 RUN pacman --sync --refresh --quiet --noconfirm pipewire pipewire-pulse xdg-desktop-portal-wlr bluez bluez-utils blueman
+RUN rfkill unblock bluetooth
 RUN systemctl enable bluetooth.service
 
 # Backlight control GUI

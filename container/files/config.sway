@@ -1,6 +1,5 @@
 workspace_layout tabbed
 xwayland disable
-fullscreen enable
 exec /bin/sh -c 'echo "$SWAYSOCK" > /tmp/swaysock'
 exec rpi-backlight-gui
 exec firefox --kiosk open.spotify.com

@@ -1,0 +1,15 @@
+#!/bin/bash
+
+set -Eeuo pipefail
+
+# This files is created by Docker and is needed as long as it's a Docker image
+# But now that we have booted, it needs to be removed, or else systemd will not
+# start all needed services.
+[[ ! -e /.dockerenv ]] || rm /.dockerenv
+
+# Bluetooth should not be blocked by rfkill.
+# This command could not be run in the Dockerfile
+rfkill unblock bluetooth
+
+reboot
+

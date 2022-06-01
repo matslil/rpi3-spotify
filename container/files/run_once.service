@@ -1,0 +1,20 @@
+# Perform configuration steps that could not be done in container for various reasons.
+# The existence of /.dockerenv is used as a marker whether this service has been run already or not.
+
+[Unit]
+Description=Remove /.dockerenv file if exists, and reboot
+DefaultDependencies=no
+Conflicts=shutdown.target
+After=systemd-remount-fs.service
+Before=systemd-sysusers.service systemd-vconsole-setup.service sysinit.target first-boot-complete.target shutdown.target
+Wants=first-boot-complete.target
+ConditionPathIsReadWrite=/
+ConditionPathExists=/.dockerenv
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/run_once
+
+[Install]
+WantedBy=sysinit.target
+

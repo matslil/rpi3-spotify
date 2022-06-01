@@ -29,6 +29,11 @@ RUN echo 'root=/dev/sda2 rw rootwait console=tty1 selinux=0 plymouth.enable=0 sm
 RUN sed -i 's/MODULES=()/MODULES=(btrfs btusb)/' /etc/mkinitcpio.conf
 RUN mkinitcpio -P
 
+# Install systemd service that do the final configuration at first boot
+COPY files/run_once.service /etc/systemd/system
+COPY files/run_once /sbin
+RUN systemctl enable run_once.service
+
 # Setup Wifi at boot
 COPY files/wlan0.network /etc/systemd/network/
 COPY files/wpa_supplicant-wlan0.conf /etc/wpa_supplicant/wpa_supplicant-wlan0.conf
@@ -70,11 +75,9 @@ RUN pacman --sync --refresh --quiet --noconfirm wayland sway firefox
 RUN echo 'MOZ_ENABLE_WAYLAND=1' >> /etc/environment
 RUN echo 'XDG_CURRENT_DESKTOP=cage' >> /etc/environment
 RUN echo 'XDG_SESSION_TYPE=wayland' >> /etc/environment
-RUN echo 'WAYLAND_DISPLAY="wayland-1"' >> /etc/environment
 
 # Install audio over bluetooth support
 RUN pacman --sync --refresh --quiet --noconfirm pipewire pipewire-pulse xdg-desktop-portal-wlr bluez bluez-utils blueman
-RUN rfkill unblock bluetooth
 RUN systemctl enable bluetooth.service
 
 # Backlight control GUI
@@ -86,4 +89,4 @@ RUN pacman --sync --quiet --noconfirm --clean --clean
 
 # Configure sway
 COPY files/config.sway /etc/sway/config
-COPY files/sway-focus /sbin
+COPY files/sway-toggle-fullscreen /sbin

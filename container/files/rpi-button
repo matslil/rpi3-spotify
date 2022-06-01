@@ -6,24 +6,27 @@ gpio=3
 from gpiozero import Button
 from signal import pause
 from subprocess import check_call
+from time import time
 
-held_for=0.0
+pushed_at = None
 
 def button_pushed():
-        global held_for
-        held_for = max(held_for, button.held_time + button.hold_time)
+    global pushed_at
+    pushed_at = time()
 
 def button_released():
-        global held_for
-        if (held_for > 3.0):
-                check_call(['/sbin/halt'])
-        elif (held_for > 0.5):
-                check_call(['/sbin/sway-focus'])
-        else:
-        	held_for = 0.0
+    global pushed_at
+    if pushed_at is None:
+        return
+    held_for = now - pushed_at
+    if (held_for > 2.0):
+        check_call(['/sbin/poweroff'])
+    elif (held_for > 0.1):
+        check_call(['/sbin/sway-toggle-fullscreen'])
+    pushed_at = None
 
-button=Button(gpio, hold_repeat=True)
-button.when_held = button_pushed
+button=Button(gpio)
+button.when_pressed = button_pushed
 button.when_released = button_released
 
 pause() # wait forever

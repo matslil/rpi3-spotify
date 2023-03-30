@@ -10,7 +10,7 @@
 #
 # In my case, I did:
 #     sudo apt install qemu-user-static
-#     docker run --rm --privileged multiarch/qemu-user-static:armhf --reset -p yes
+#     docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
 #
 # It is assumed that the following wiring has been done on the Raspberry PI:
 #   - GPIO 18 to 330ohm resistor to LED to GND
@@ -18,7 +18,8 @@
 #
 # This will give you a power-on LED and an on/off button
 
-readonly FILE='ArchLinuxARM-rpi-2-latest.tar.gz'
+readonly IMAGE_URL='https://download.fedoraproject.org/pub/fedora/linux/releases/36/Spins/armhfp/images/Fedora-Xfce-36-1.5.armhfp.raw.xz'
+readonly FILE=$(basename "$IMAGE_URL")
 
 set -Eeuo pipefail
 
@@ -84,7 +85,7 @@ assert_tools() {
 	done
 }
 
-assert_tools docker udevadm sed mountpoint curl
+assert_tools docker udevadm sed mountpoint curl guestfish
 
 [[ -f ${FILES_ROOT}/env ]] || fail "${FILES_ROOT}/env: Missing environment description file. Call script without parameters for more information"
 
@@ -97,7 +98,8 @@ if [[ -f ${FILES_ROOT}/${FILE} ]]; then
 	printf -- '--- %s: Re-using file...\n' "${FILES_ROOT}/${FILE}"
 else
 	printf -- '--- %s: Downloading base image... \n' "${FILES_ROOT}/${FILE}"
-	curl -Lo "${FILES_ROOT}/${FILE}" "http://os.archlinuxarm.org/os/${FILE}"
+	curl -Lo "${FILES_ROOT}/${FILE}" "${IMAGE_URL}"
+    guestfish --ro -a "$IMAGE_URL" -m 
 fi
 
 printf -- '--- Configuring OS image...\n'

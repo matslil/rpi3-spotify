@@ -5,7 +5,7 @@
 from scratch as build
 
 # Arguments expected to be given on build command line
-ARG IMAGE="ArchLinuxARM-rpi-2-latest.tar.gz"
+ARG IMAGE
 
 # Import files from repository to image
 ADD files/${IMAGE} /

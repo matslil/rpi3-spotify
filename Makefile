@@ -3,18 +3,11 @@
 OLD_SHELL := $(SHELL)
 SHELL = $(warning Building $@$(if $<, (from $<))$(if $?, ($? newer)))$(OLD_SHELL)
 
-repo_path := $(patsubst %/,%,$(dir $(abspath "$(MAKEFILE_LIST)")))
-image_url := https://updates.volumio.org/pi/volumio/3.435/Volumio-3.435-2023-03-06-pi.zip
-image_file := $(notdir $(image_url))
-
 vpath Dockerfile $(repo_path)/container
 
-image: $(image_file:.zip=.img)
-	echo "$<"
+export SUITE := buster
 
-%.img: %.zip
-	unzip $<
+rpi3-spotify.rootfs.tar:
+	mmdebstrap --variant=minbase --include=raspberrypi-archive-keyring,raspberrypi-bootloader-nokernel,raspberrypi-kernel,raspberrypi-ui-mods,python3,python3-pip,python3-setuptools $SUITE $@
 
-$(image_file):
-	curl -Lo $(image_file) $(image_url)
 

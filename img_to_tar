@@ -1,0 +1,29 @@
+#!/bin/bash -eu
+set -o pipefail
+
+set -x
+
+infile="$1"
+outfile="$2"
+
+offset=$(echo "512 * $(sfdisk --list --json "$infile" | jq .partitiontable.partitions[].start)" | bc)
+
+cleanup() {
+    if [[ -n ${loop_device:-} ]]; then
+        udisksctl unmount -b "$loop_device"
+        udisksctl loop-delete -b "$loop_device"
+    fi
+}
+
+trap cleanup EXIT
+
+loop_device=$(udisksctl loop-setup --file "$infile" --offset "$offset" --read-only --no-user-interaction | sed -E 's/.* as (.*)\.$/\1/')
+
+for (( retries=0; retries < 5; retries++ )); do
+    mount_path="$(udisksctl info -b /dev/loop0 | sed -nE 's|.*MountPoints: *(.*)$|\1|p')"
+    [[ -z $mount_path ]] || break
+    sleep 1
+done
+
+tar czf "$outfile" -C "$mount_path" .
+

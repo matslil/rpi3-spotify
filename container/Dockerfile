@@ -8,7 +8,9 @@ from scratch as build
 ARG IMAGE
 
 # Import files from repository to image
-ADD files/${IMAGE} /
+ADD ${IMAGE} /
+
+COPY qemu-arm-static /usr/bin
 
 # This file is expected to be created by user, and should have the following content:
 # ALARM_PW=<pw for user alarm>
@@ -17,6 +19,8 @@ ADD files/${IMAGE} /
 
 COPY files/env /
 COPY files/config.txt /boot/
+
+RUN apt-get -y update
 
 # Install pacman database and tools for generating initramfs
 RUN pacman-key --init
